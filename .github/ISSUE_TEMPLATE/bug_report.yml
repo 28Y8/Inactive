@@ -1,0 +1,64 @@
+name: Bug report
+description: Something in Inactive does not work as it should.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting this. If it lets someone get past the lock in a way the README does not already list, please report it privately instead (see SECURITY.md).
+
+  - type: input
+    id: version
+    attributes:
+      label: Inactive version
+      description: Shown in Settings.
+      placeholder: 1.0.0
+    validations:
+      required: true
+
+  - type: input
+    id: windows
+    attributes:
+      label: Windows version
+      description: Run `winver` to see it.
+      placeholder: Windows 11 25H2
+    validations:
+      required: true
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: What did you expect to happen?
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Open Settings
+        2. Set the screen style to Covered
+        3. Lock the PC
+    validations:
+      required: true
+
+  - type: textarea
+    id: setup
+    attributes:
+      label: Your setup
+      description: Anything that might matter, such as the number of monitors, display scaling, touch screen, remote control tools or antivirus.
+
+  - type: textarea
+    id: log
+    attributes:
+      label: Log
+      description: The end of `%APPDATA%\Inactive\logs\inactive.log`, if there is anything relevant. It never holds keystrokes or your PIN. Paths can show your Windows user name, so replace it before posting.
+      render: text

@@ -1,0 +1,52 @@
+<Window x:Class="Inactive.Dialogs.FirstLockDialog"
+        x:ClassModifier="internal"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Inactive"
+        Icon="pack://application:,,,/Assets/Inactive.ico"
+        Width="420"
+        SizeToContent="Height"
+        ResizeMode="NoResize"
+        ShowInTaskbar="False"
+        UseLayoutRounding="True">
+  <StackPanel Margin="24">
+    <TextBlock Style="{StaticResource PageTitleTextStyle}" FontSize="20" Text="Before you lock" />
+    <TextBlock Style="{StaticResource SecondaryTextStyle}" Margin="0,8,0,0" Text="To get back in, press this key:" />
+
+    <Border Style="{StaticResource KeyCapStyle}" Margin="0,20,0,0">
+      <TextBlock x:Name="UnlockKeyText"
+                 Style="{StaticResource KeyCapTextStyle}"
+                 FontSize="28" />
+    </Border>
+
+    <TextBlock x:Name="PinText"
+               Style="{StaticResource BodyTextStyle}"
+               Margin="0,12,0,0"
+               HorizontalAlignment="Center"
+               Text="Then enter your PIN."
+               Visibility="Collapsed" />
+
+    <TextBlock Style="{StaticResource SecondaryTextStyle}"
+               Margin="0,20,0,0"
+               Text="If you forget it, press Ctrl + Alt + Del, choose Lock and sign back in to Windows. That ends the lock." />
+
+    <TextBlock Style="{StaticResource SecondaryTextStyle}"
+               Margin="0,8,0,0"
+               Text="Unlocking needs a physical keyboard, so keep one attached." />
+
+    <StackPanel Margin="0,24,0,0" HorizontalAlignment="Right" Orientation="Horizontal">
+      <Button x:Name="LockButton"
+              Style="{StaticResource AccentButtonStyle}"
+              MinWidth="96"
+              Content="Lock now"
+              IsDefault="True"
+              AutomationProperties.Name="Lock now"
+              Click="OnLockClick" />
+      <Button MinWidth="96"
+              Margin="8,0,0,0"
+              Content="Cancel"
+              IsCancel="True"
+              AutomationProperties.Name="Cancel" />
+    </StackPanel>
+  </StackPanel>
+</Window>

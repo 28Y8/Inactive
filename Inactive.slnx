@@ -1,0 +1,12 @@
+<Solution>
+  <Configurations>
+    <Platform Name="x64" />
+  </Configurations>
+  <Folder Name="/src/">
+    <Project Path="src/Inactive.Core/Inactive.Core.csproj" />
+    <Project Path="src/Inactive/Inactive.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Inactive.Tests/Inactive.Tests.csproj" />
+  </Folder>
+</Solution>

@@ -1,0 +1,153 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release
+
+defaults:
+  run:
+    shell: pwsh
+
+env:
+  REPO_URL: ${{ github.server_url }}/${{ github.repository }}
+
+jobs:
+  # Tests and builds run package code, so they get a read-only token. This limits what a bad
+  # dependency can reach. It does not stop one from ending up in the package.
+  build:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # The next step needs main.
+          fetch-depth: 0
+          persist-credentials: false
+
+      # A guard against mistakes, not against anyone who can push to main.
+      - name: Check that the tag is on main
+        run: |
+          git merge-base --is-ancestor $env:GITHUB_SHA origin/main
+          if ($LASTEXITCODE -ne 0) {
+            throw "$env:GITHUB_REF_NAME is not on main."
+          }
+
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          global-json-file: global.json
+
+      - name: Read the version from the tag
+        id: version
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          $version = $env:TAG -replace '^v', ''
+          if ($version -notmatch '^\d+\.\d+\.\d+(-[0-9A-Za-z][0-9A-Za-z.-]*)?$') {
+            throw "Tag $env:TAG is not a version such as v1.2.0."
+          }
+          Add-Content $env:GITHUB_OUTPUT "version=$version"
+
+      - name: Restore tools
+        run: dotnet tool restore
+
+      - name: Test
+        run: dotnet test --solution Inactive.slnx --configuration Release
+
+      # vpk builds the delta update against the previous full package. The very first release
+      # finds nothing here, which vpk reports as a warning and carries on. Draft cleanup happens
+      # in the publish job, but a read-only token should not list drafts, so none can be the base.
+      - name: Download the previous release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: dotnet vpk download github --repoUrl $env:REPO_URL --token $env:GH_TOKEN --outputDir artifacts/Releases
+
+      # Code signing is off by default, so the installer ships unsigned. To turn it on, set the
+      # repository variable SIGNING_ENABLED to true and the secret SIGN_TEMPLATE to a signing
+      # command with {{file}} where the path goes. vpk runs it on every unsigned binary, Setup
+      # included. A secret kept in an environment only reaches a job that names that environment,
+      # so if SIGN_TEMPLATE moves to the release environment, this job has to name it as well.
+      # SignPath Foundation (free for open source) signs through its own GitHub action instead of
+      # a command, so using it means adding that action around this flow.
+      - name: Build the installer
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+          VPK_SIGN_TEMPLATE: ${{ vars.SIGNING_ENABLED == 'true' && secrets.SIGN_TEMPLATE || '' }}
+        run: ./build/pack.ps1 -Version $env:VERSION
+
+      # With no template, vpk only warns and packs unsigned files, so the run would stay green.
+      - name: Check the installer signature
+        if: vars.SIGNING_ENABLED == 'true'
+        run: |
+          if ((Get-AuthenticodeSignature artifacts/Releases/Inactive-win-Setup.exe).Status -ne 'Valid') {
+            throw 'Setup.exe is not signed.'
+          }
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: releases
+          path: artifacts/Releases
+          if-no-files-found: error
+          retention-days: 7
+
+  # This job holds the token that can publish, so it must never build or test repository code.
+  publish:
+    needs: build
+    runs-on: windows-latest
+    timeout-minutes: 30
+    environment: release
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          global-json-file: global.json
+
+      - name: Restore tools
+        run: dotnet tool restore
+
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: releases
+          path: artifacts/Releases
+
+      # A publish that failed part way leaves a draft, which blocks a re-run. Every release here
+      # is automated, so any draft is a leftover.
+      - name: Remove leftover draft releases
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh api --paginate "repos/$env:GITHUB_REPOSITORY/releases" --jq '.[] | select(.draft) | .id' |
+            ForEach-Object { gh api -X DELETE "repos/$env:GITHUB_REPOSITORY/releases/$_" }
+
+      # --tag matters: without it vpk would create a second tag without the leading v.
+      # The updater ignores prereleases, so a version with a suffix never reaches users.
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.ref_name }}
+          VERSION: ${{ needs.build.outputs.version }}
+        run: |
+          $options = @(
+            '--repoUrl', $env:REPO_URL,
+            '--token', $env:GH_TOKEN,
+            '--outputDir', 'artifacts/Releases',
+            '--tag', $env:TAG,
+            '--releaseName', "Inactive $env:VERSION",
+            '--publish'
+          )
+          if ($env:VERSION.Contains('-')) {
+            $options += '--pre'
+          }
+          dotnet vpk upload github @options
